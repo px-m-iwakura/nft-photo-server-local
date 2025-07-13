@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "ms-vscode.vscode-docker",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.vscode-json",
+    "bradlc.vscode-tailwindcss",
+    "ms-vscode.vscode-jest",
+    "humao.rest-client",
+    "formulahendry.auto-rename-tag",
+    "christian-kohler.path-intellisense",
+    "ms-vscode.vscode-thunder-client",
+    "mongodb.mongodb-vscode",
+    "solidity.solidity"
+  ]
+}

@@ -1,0 +1,48 @@
+﻿services:
+  ganache:
+    image: trufflesuite/ganache:v7.9.1
+    ports:
+      - "8545:8545"
+    command: >
+      --host 0.0.0.0
+      --port 8545
+      --networkId 1337
+      --chainId 1337
+      --accounts 10
+      --deterministic
+      --mnemonic "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+    volumes:
+      - ganache_data:/app/db
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=nft_db
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    depends_on:
+      - mongodb
+      - ganache
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongodb:27017/nft_db
+      - BLOCKCHAIN_RPC=http://ganache:8545
+      - CHAIN_ID=1337
+      - DEPLOY_CONTRACT=true
+      - PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev
+
+volumes:
+  mongodb_data:
+  ganache_data:
