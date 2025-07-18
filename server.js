@@ -66,8 +66,8 @@ async function initializeTestData() {
     ];
 
     for (const userData of testUsers) {
-      const existingUser = await User.findOne({ 
-        blockchain_account_address: userData.blockchain_account_address 
+      const existingUser = await User.findOne({
+        blockchain_account_address: userData.blockchain_account_address
       });
       if (!existingUser) {
         await User.create(userData);
@@ -97,6 +97,111 @@ mongoose.connection.once('open', async () => {
 });
 
 // === API エンドポイント ===
+
+// ユーザー登録API
+app.post('/api/users/register', async (req, res) => {
+  try {
+    const { blockchain_account_address, nickname } = req.body;
+
+    // バリデーション
+    if (!blockchain_account_address || !nickname) {
+      return res.status(400).json({
+        success: false,
+        error: 'ブロックチェーンアカウントアドレスとニックネームは必須です'
+      });
+    }
+
+    // アドレス形式チェック
+    if (!/^0x[a-fA-F0-9]{40}$/.test(blockchain_account_address)) {
+      return res.status(400).json({
+        success: false,
+        error: '無効なブロックチェーンアカウントアドレス形式です'
+      });
+    }
+
+    // ニックネーム長さチェック
+    if (nickname.length > 50) {
+      return res.status(400).json({
+        success: false,
+        error: 'ニックネームは50文字以内で入力してください'
+      });
+    }
+
+    console.log('User registration request:', { blockchain_account_address, nickname });
+
+    // 重複チェック
+    const existingUser = await User.findOne({ blockchain_account_address });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: 'このブロックチェーンアカウントアドレスは既に登録されています'
+      });
+    }
+
+    // データベースにユーザー情報を保存（token_idは後で更新）
+    const newUser = await User.create({
+      blockchain_account_address,
+      nickname
+    });
+
+    console.log('✅ User saved to database:', newUser._id);
+
+    try {
+      // ブロックチェーンでNFTをmint（slot:1, value:1でユーザー用NFT）
+      const tokenId = await blockchainService.mint(blockchain_account_address, 1, 1);
+      console.log('✅ NFT minted with tokenId:', tokenId);
+
+      // token_idをデータベースに更新
+      await User.findByIdAndUpdate(newUser._id, {
+        token_id: tokenId.toString()
+      });
+
+      console.log('✅ Token ID updated in database');
+
+      // setTokenURIでニックネームを設定
+      await blockchainService.setTokenURI(tokenId, nickname);
+      console.log('✅ Token URI set with nickname:', nickname);
+
+      // 成功レスポンス
+      res.json({
+        success: true,
+        message: 'ユーザー登録が完了しました',
+        user: {
+          blockchain_account_address,
+          nickname,
+          token_id: tokenId.toString()
+        },
+        blockchain: {
+          tokenId: tokenId,
+          slot: 1,
+          value: 1,
+          network: 'Local (Ganache)'
+        }
+      });
+
+    } catch (blockchainError) {
+      console.error('❌ Blockchain error during user registration:', blockchainError);
+
+      // ブロックチェーン処理失敗時はデータベースからユーザーを削除（ロールバック）
+      await User.findByIdAndDelete(newUser._id);
+      console.log('🔄 User data rolled back due to blockchain error');
+
+      res.status(500).json({
+        success: false,
+        error: 'ブロックチェーン処理中にエラーが発生しました',
+        details: blockchainError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ User registration API error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'ユーザー登録中にサーバーエラーが発生しました',
+      details: error.message
+    });
+  }
+});
 
 // 写真のThingsToken登録
 app.post('/api/register-photo', async (req, res) => {
@@ -199,8 +304,8 @@ app.get('/api/network', async (req, res) => {
 app.get('/health', async (req, res) => {
   try {
     const networkInfo = await blockchainService.getNetworkInfo();
-    res.json({ 
-      status: 'OK', 
+    res.json({
+      status: 'OK',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
       blockchain: {
@@ -211,8 +316,8 @@ app.get('/health', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      status: 'ERROR', 
+    res.status(500).json({
+      status: 'ERROR',
       error: error.message,
       timestamp: new Date().toISOString()
     });
@@ -222,8 +327,8 @@ app.get('/health', async (req, res) => {
 // エラーハンドリング
 app.use((err, req, res, next) => {
   console.error('Server error:', err.stack);
-  res.status(500).json({ 
-    success: false, 
+  res.status(500).json({
+    success: false,
     error: 'サーバー内部エラーが発生しました'
   });
 });
